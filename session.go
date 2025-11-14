@@ -30,6 +30,7 @@ type Session struct {
 	scrollOffset    int      // Display line offset (accounts for wrapping)
 	prevSelectedLink int     // Previous selected link for partial redraw
 	prevScrollOffset int     // Previous scroll offset for partial redraw
+	lastByte        byte     // Last byte received (for CRLF handling)
 	history         []HistoryEntry
 	historyIndex    int // Current position in history (-1 means no history)
 	terminalHeight  int
@@ -126,12 +127,28 @@ func (s *Session) handleInput(b byte) error {
 
 	switch b {
 	case 'g', 'G': // Go to URL
+		s.lastByte = b
 		s.inputMode = "goto"
 		s.inputBuffer = ""
 		s.write([]byte("\r\n\x1b[KEnter Gemini URL: "))
 		return nil
 
-	case '\r', '\n': // Enter - follow selected link
+	case '\r': // Enter - follow selected link
+		s.lastByte = '\r'
+		if s.selectedLink >= 0 && s.selectedLink < len(s.links) {
+			link := s.links[s.selectedLink]
+			s.navigateTo(link.URL)
+		}
+		return nil
+
+	case '\n': // LF - ignore if it immediately follows CR (CRLF handling)
+		if s.lastByte == '\r' {
+			// This is part of CRLF, ignore it
+			s.lastByte = '\n'
+			return nil
+		}
+		// LF alone (some clients send just LF)
+		s.lastByte = '\n'
 		if s.selectedLink >= 0 && s.selectedLink < len(s.links) {
 			link := s.links[s.selectedLink]
 			s.navigateTo(link.URL)
@@ -139,12 +156,16 @@ func (s *Session) handleInput(b byte) error {
 		return nil
 
 	case 0x7f, 0x08: // Backspace/Delete - go back
+		s.lastByte = b
 		s.navigateBack()
 		s.render()
 		return nil
 
 	case 'q', 'Q': // Quit
 		return fmt.Errorf("user quit")
+
+	default:
+		s.lastByte = b
 	}
 
 	return nil
@@ -152,7 +173,29 @@ func (s *Session) handleInput(b byte) error {
 
 func (s *Session) handleGotoInput(b byte) error {
 	switch b {
-	case '\r', '\n': // Submit
+	case '\r': // Submit
+		s.lastByte = '\r'
+		s.inputMode = ""
+		url := strings.TrimSpace(s.inputBuffer)
+		if url != "" {
+			// Add gemini:// prefix if not present
+			if !strings.HasPrefix(url, "gemini://") {
+				url = "gemini://" + url
+			}
+			s.navigateTo(url)
+		} else {
+			s.render()
+		}
+		return nil
+
+	case '\n': // LF - ignore if it immediately follows CR (CRLF handling)
+		if s.lastByte == '\r' {
+			// This is part of CRLF, ignore it
+			s.lastByte = '\n'
+			return nil
+		}
+		// LF alone (some clients send just LF)
+		s.lastByte = '\n'
 		s.inputMode = ""
 		url := strings.TrimSpace(s.inputBuffer)
 		if url != "" {
@@ -167,12 +210,14 @@ func (s *Session) handleGotoInput(b byte) error {
 		return nil
 
 	case 0x1b: // ESC - cancel
+		s.lastByte = b
 		s.inputMode = ""
 		s.inputBuffer = ""
 		s.render()
 		return nil
 
 	case 0x7f, 0x08: // Backspace
+		s.lastByte = b
 		if len(s.inputBuffer) > 0 {
 			s.inputBuffer = s.inputBuffer[:len(s.inputBuffer)-1]
 			s.write([]byte("\b \b")) // Erase character
@@ -185,6 +230,7 @@ func (s *Session) handleGotoInput(b byte) error {
 			s.inputBuffer += string(b)
 			s.write([]byte{b})
 		}
+		s.lastByte = b
 	}
 
 	return nil

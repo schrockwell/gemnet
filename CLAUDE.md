@@ -38,6 +38,7 @@ telnet localhost 2323
 - Input modes: normal navigation and "goto" mode for URL entry
 - Detects and highlights Gemini headers (lines starting with #) in bold text
 - Uses smart rendering: only redraws changed links when navigating without scrolling
+- CRLF handling: Tracks last byte to detect CRLF sequences and ignore the LF (prevents dual navigation)
 
 **gemini.go**
 - Implements Gemini protocol client
@@ -57,6 +58,7 @@ telnet localhost 2323
 - headerLines: Map of content line numbers that are headers (for bold rendering)
 - scrollOffset: Display line offset (not content line) - accounts for wrapped lines
 - prevScrollOffset, prevSelectedLink: Previous state for detecting when partial redraw is possible
+- lastByte: Last byte received (for CRLF handling - prevents dual Enter processing)
 - history: Array of HistoryEntry structs storing URL, scroll position, and selected link for each visited page
 - historyIndex: Current position in history array (-1 means no history)
 - Terminal dimensions (default 80x24)
@@ -159,6 +161,16 @@ To improve responsiveness on vintage terminals with slow baud rates:
 - renderPartialLinkUpdate() only redraws the old and new selected links
 - renderContentLine() positions the cursor and redraws a single content line at its screen location
 - This dramatically reduces output for link navigation, making the UI much snappier on slow connections
+
+**CRLF Handling:**
+Many telnet clients send CRLF (\\r\\n) for the Enter key, which would trigger dual navigation:
+- Session.lastByte tracks the last byte received
+- When CR (\\r) is received, it processes the input and sets lastByte = '\\r'
+- When LF (\\n) is received, it checks if lastByte == '\\r'
+  - If yes: this is part of CRLF, so LF is ignored (but lastByte is updated to '\\n')
+  - If no: this is a standalone LF, so it processes the input
+- All other input updates lastByte to prevent stale state
+- This prevents the "double enter" bug where following a link would navigate twice
 
 ### Gemini Protocol Details
 
