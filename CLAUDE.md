@@ -34,9 +34,10 @@ telnet localhost 2323
 - Manages individual client sessions and terminal state
 - Handles all keyboard input and navigation logic
 - Maintains page content, link list, header lines, scroll position, and history stack
-- Renders the terminal UI using VT100/ANSI escape codes
+- Renders the terminal UI using VT100/ANSI escape codes with partial update optimization
 - Input modes: normal navigation and "goto" mode for URL entry
 - Detects and highlights Gemini headers (lines starting with #) in bold text
+- Uses smart rendering: only redraws changed links when navigating without scrolling
 
 **gemini.go**
 - Implements Gemini protocol client
@@ -55,6 +56,7 @@ telnet localhost 2323
 - Tracks current URL, content lines, links, selected link index
 - headerLines: Map of content line numbers that are headers (for bold rendering)
 - scrollOffset: Display line offset (not content line) - accounts for wrapped lines
+- prevScrollOffset, prevSelectedLink: Previous state for detecting when partial redraw is possible
 - history: Array of HistoryEntry structs storing URL, scroll position, and selected link for each visited page
 - historyIndex: Current position in history array (-1 means no history)
 - Terminal dimensions (default 80x24)
@@ -99,6 +101,7 @@ Uses VT100/ANSI escape sequences:
 - `\x1b[1m` - bold/bright text (for headers)
 - `\x1b[0m` - reset formatting
 - `\x1b[K` - clear to end of line
+- `\x1b[row;colH` - move cursor to specific position (for partial updates)
 
 Long lines are wrapped to the terminal width (default 80 columns). The wrapLine() function breaks lines into multiple display lines that fit within the terminal width. When a link line is wrapped, all wrapped segments are highlighted together.
 
@@ -148,6 +151,15 @@ Left/Right arrows and Backspace provide full browser-like history navigation:
 - loadFromHistory() fetches the page and restores the saved scroll position and selected link
 - State validation ensures restored positions are valid (bounds checking for links and scroll offset)
 
+**Rendering Optimization:**
+To improve responsiveness on vintage terminals with slow baud rates:
+- prevScrollOffset and prevSelectedLink track the previous state
+- When up/down arrows change the selected link WITHOUT scrolling, only those two links are redrawn
+- render() does a full screen redraw and updates prev state for next comparison
+- renderPartialLinkUpdate() only redraws the old and new selected links
+- renderContentLine() positions the cursor and redraws a single content line at its screen location
+- This dramatically reduces output for link navigation, making the UI much snappier on slow connections
+
 ### Gemini Protocol Details
 
 - Requests are URL + CRLF
@@ -169,8 +181,9 @@ When adding features or fixing bugs:
 
 - **Default start page**: Change the URL in navigateTo() call in Run() in session.go
 - **Keyboard shortcuts**: Modify handleInput() in session.go
-- **Link rendering**: Update parseContent() to change how Gemini links are displayed
-- **Header rendering**: Modify the header detection logic in parseContent() and formatting in render()
+- **Link rendering**: Update parseContent() to change how Gemini links are displayed; also update renderContentLine() if display format changes
+- **Header rendering**: Modify the header detection logic in parseContent() and formatting in render() and renderContentLine()
+- **Rendering optimization**: Modify renderPartialLinkUpdate() and renderContentLine() for different update strategies
 - **History behavior**: Modify navigateBack(), navigateForward(), and loadFromHistory() in session.go
 - **State preservation**: Add fields to HistoryEntry struct to save additional state per page
 - **UTF-8 mappings**: Add entries to unicodeToASCII() in utils.go
