@@ -51,7 +51,8 @@ telnet localhost 2323
 ### Key Data Structures
 
 **Session**
-- Tracks current URL, content lines, links, selected link index, scroll offset
+- Tracks current URL, content lines, links, selected link index
+- scrollOffset: Display line offset (not content line) - accounts for wrapped lines
 - Maintains navigation history for back functionality
 - Terminal dimensions (default 80x24)
 - Input state (mode and buffer for URL entry)
@@ -81,6 +82,17 @@ Uses VT100/ANSI escape sequences:
 - `\x1b[7m` - reverse video (highlight selected link)
 - `\x1b[0m` - reset formatting
 - `\x1b[K` - clear to end of line
+
+Long lines are wrapped to the terminal width (default 80 columns). The wrapLine() function breaks lines into multiple display lines that fit within the terminal width. When a link line is wrapped, all wrapped segments are highlighted together.
+
+**Scrolling with Wrapped Lines:**
+- scrollOffset is measured in display lines, not content lines
+- Helper functions convert between content lines and display lines:
+  - getDisplayLineCount() - returns how many display lines a content line occupies
+  - contentLineToDisplayLine() - converts content line index to display line index
+  - getTotalDisplayLines() - returns total display lines for all content
+- When scrolling (page up/down) or navigating links (arrows), the system automatically accounts for wrapped lines
+- The render() function iterates through content lines, wraps each one, and skips display lines until reaching scrollOffset
 
 Keyboard sequences:
 - ESC [ A/B - up/down arrows

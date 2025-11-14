@@ -20,7 +20,7 @@ type Session struct {
 	content         []string // Content lines
 	links           []Link
 	selectedLink    int
-	scrollOffset    int
+	scrollOffset    int      // Display line offset (accounts for wrapping)
 	history         []string
 	terminalHeight  int
 	terminalWidth   int
@@ -276,14 +276,15 @@ func (s *Session) moveLinkSelection(delta int) {
 		s.selectedLink = len(s.links) - 1
 	}
 
-	// Auto-scroll to keep selected link visible
-	linkLine := s.links[s.selectedLink].Line
+	// Auto-scroll to keep selected link visible (in display lines)
+	linkContentLine := s.links[s.selectedLink].Line
+	linkDisplayLine := s.contentLineToDisplayLine(linkContentLine)
 	visibleLines := s.terminalHeight - 3
 
-	if linkLine < s.scrollOffset {
-		s.scrollOffset = linkLine
-	} else if linkLine >= s.scrollOffset+visibleLines {
-		s.scrollOffset = linkLine - visibleLines + 1
+	if linkDisplayLine < s.scrollOffset {
+		s.scrollOffset = linkDisplayLine
+	} else if linkDisplayLine >= s.scrollOffset+visibleLines {
+		s.scrollOffset = linkDisplayLine - visibleLines + 1
 	}
 }
 
@@ -291,15 +292,60 @@ func (s *Session) scrollPage(delta int) {
 	linesPerPage := s.terminalHeight - 3
 	s.scrollOffset += delta * linesPerPage
 
+	totalDisplayLines := s.getTotalDisplayLines()
+
 	if s.scrollOffset < 0 {
 		s.scrollOffset = 0
 	}
-	if s.scrollOffset >= len(s.content) {
-		s.scrollOffset = len(s.content) - 1
+	if s.scrollOffset >= totalDisplayLines {
+		s.scrollOffset = totalDisplayLines - 1
 	}
 	if s.scrollOffset < 0 {
 		s.scrollOffset = 0
 	}
+}
+
+func (s *Session) wrapLine(line string) []string {
+	if len(line) <= s.terminalWidth-1 {
+		return []string{line}
+	}
+
+	var wrapped []string
+	for len(line) > 0 {
+		if len(line) <= s.terminalWidth-1 {
+			wrapped = append(wrapped, line)
+			break
+		}
+		wrapped = append(wrapped, line[:s.terminalWidth-1])
+		line = line[s.terminalWidth-1:]
+	}
+	return wrapped
+}
+
+// getDisplayLineCount returns how many display lines a content line takes
+func (s *Session) getDisplayLineCount(contentLineIdx int) int {
+	if contentLineIdx < 0 || contentLineIdx >= len(s.content) {
+		return 0
+	}
+	return len(s.wrapLine(s.content[contentLineIdx]))
+}
+
+// contentLineToDisplayLine converts a content line index to its first display line index
+func (s *Session) contentLineToDisplayLine(contentLineIdx int) int {
+	displayLine := 0
+	for i := 0; i < contentLineIdx && i < len(s.content); i++ {
+		displayLine += s.getDisplayLineCount(i)
+	}
+	return displayLine
+}
+
+// getTotalDisplayLines returns the total number of display lines
+func (s *Session) getTotalDisplayLines() int {
+	total := 0
+	for i := 0; i < len(s.content); i++ {
+		total += s.getDisplayLineCount(i)
+	}
+	return total
 }
 
 func (s *Session) render() {
@@ -326,37 +372,48 @@ func (s *Session) render() {
 	}
 
 	visibleLines := s.terminalHeight - 3
-	endLine := s.scrollOffset + visibleLines
-	if endLine > len(s.content) {
-		endLine = len(s.content)
-	}
 
 	// Find which link is currently selected
-	selectedLine := -1
+	selectedContentLine := -1
 	if s.selectedLink >= 0 && s.selectedLink < len(s.links) {
-		selectedLine = s.links[s.selectedLink].Line
+		selectedContentLine = s.links[s.selectedLink].Line
 	}
 
-	for i := s.scrollOffset; i < endLine; i++ {
-		line := s.content[i]
+	// Render content with wrapping, accounting for scroll offset in display lines
+	currentDisplayLine := 0
+	linesDisplayed := 0
 
-		// Highlight selected link
-		if i == selectedLine {
-			s.write([]byte("\x1b[7m")) // Reverse video
+	for contentLineIdx := 0; contentLineIdx < len(s.content) && linesDisplayed < visibleLines; contentLineIdx++ {
+		line := s.content[contentLineIdx]
+		wrappedLines := s.wrapLine(line)
+		isSelected := contentLineIdx == selectedContentLine
+
+		for _, wrappedLine := range wrappedLines {
+			// Skip lines before scroll offset
+			if currentDisplayLine < s.scrollOffset {
+				currentDisplayLine++
+				continue
+			}
+
+			// Stop if we've filled the screen
+			if linesDisplayed >= visibleLines {
+				break
+			}
+
+			if isSelected {
+				s.write([]byte("\x1b[7m")) // Reverse video
+			}
+
+			s.write([]byte(wrappedLine))
+
+			if isSelected {
+				s.write([]byte("\x1b[0m")) // Reset
+			}
+
+			s.write([]byte("\r\n"))
+			linesDisplayed++
+			currentDisplayLine++
 		}
-
-		// Truncate line if too long
-		if len(line) > s.terminalWidth-1 {
-			line = line[:s.terminalWidth-1]
-		}
-
-		s.write([]byte(line))
-
-		if i == selectedLine {
-			s.write([]byte("\x1b[0m")) // Reset
-		}
-
-		s.write([]byte("\r\n"))
 	}
 }
 
