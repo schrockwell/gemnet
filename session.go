@@ -19,6 +19,7 @@ type Session struct {
 	currentURL      string
 	content         []string // Content lines
 	links           []Link
+	headerLines     map[int]bool // Set of line numbers that are headers
 	selectedLink    int
 	scrollOffset    int      // Display line offset (accounts for wrapping)
 	history         []string
@@ -230,14 +231,18 @@ func (s *Session) parseContent(body string) {
 	lines := strings.Split(asciiBody, "\n")
 	s.content = make([]string, 0, len(lines))
 	s.links = make([]Link, 0)
+	s.headerLines = make(map[int]bool)
 	s.selectedLink = 0 // Reset selected link when parsing new content
 
 	linkIndex := 0
 	for _, line := range lines {
 		line = strings.TrimRight(line, "\r")
 
-		// Check if this is a link line
-		if strings.HasPrefix(line, "=>") {
+		// Check if this is a header line
+		if strings.HasPrefix(line, "#") {
+			s.headerLines[len(s.content)] = true
+		} else if strings.HasPrefix(line, "=>") {
+			// Check if this is a link line
 			// Parse link
 			linkText := strings.TrimSpace(line[2:])
 			parts := strings.Fields(linkText)
@@ -515,6 +520,7 @@ func (s *Session) render() {
 		line := s.content[contentLineIdx]
 		wrappedLines := s.wrapLine(line)
 		isSelected := contentLineIdx == selectedContentLine
+		isHeader := s.headerLines[contentLineIdx]
 
 		for _, wrappedLine := range wrappedLines {
 			// Skip lines before scroll offset
@@ -530,11 +536,13 @@ func (s *Session) render() {
 
 			if isSelected {
 				s.write([]byte("\x1b[7m")) // Reverse video
+			} else if isHeader {
+				s.write([]byte("\x1b[1m")) // Bold for headers
 			}
 
 			s.write([]byte(wrappedLine))
 
-			if isSelected {
+			if isSelected || isHeader {
 				s.write([]byte("\x1b[0m")) // Reset
 			}
 

@@ -33,9 +33,10 @@ telnet localhost 2323
 **session.go**
 - Manages individual client sessions and terminal state
 - Handles all keyboard input and navigation logic
-- Maintains page content, link list, scroll position, and history stack
+- Maintains page content, link list, header lines, scroll position, and history stack
 - Renders the terminal UI using VT100/ANSI escape codes
 - Input modes: normal navigation and "goto" mode for URL entry
+- Detects and highlights Gemini headers (lines starting with #) in bold text
 
 **gemini.go**
 - Implements Gemini protocol client
@@ -52,6 +53,7 @@ telnet localhost 2323
 
 **Session**
 - Tracks current URL, content lines, links, selected link index
+- headerLines: Map of content line numbers that are headers (for bold rendering)
 - scrollOffset: Display line offset (not content line) - accounts for wrapped lines
 - Maintains navigation history for back functionality
 - Terminal dimensions (default 80x24)
@@ -69,18 +71,21 @@ telnet localhost 2323
 2. Session initialized with welcome message
 3. Automatically loads gemini://geminiprotocol.net/ as the default start page
 4. FetchGemini() retrieves content over TLS
-5. parseContent() extracts links (lines starting with "=>") and converts UTF-8 to ASCII
-6. Links are numbered and displayed as "[N] link text"
-7. User navigates with arrow keys (changes selectedLink)
-8. Enter key follows the selected link (resolves relative URLs against current base)
-9. Backspace returns to previous page via history stack
-10. User can press 'g' at any time to enter a new Gemini URL
+5. parseContent() processes content:
+   - Extracts links (lines starting with "=>") and numbers them as "[N] link text"
+   - Detects headers (lines starting with "#") and marks them for bold rendering (# symbols kept)
+   - Converts UTF-8 to ASCII for vintage terminal compatibility
+6. User navigates with arrow keys (changes selectedLink)
+7. Enter key follows the selected link (resolves relative URLs against current base)
+8. Backspace returns to previous page via history stack
+9. User can press 'g' at any time to enter a new Gemini URL
 
 ### Terminal Control
 
 Uses VT100/ANSI escape sequences:
 - `\x1b[2J\x1b[H` - clear screen and home cursor
 - `\x1b[7m` - reverse video (highlight selected link)
+- `\x1b[1m` - bold/bright text (for headers)
 - `\x1b[0m` - reset formatting
 - `\x1b[K` - clear to end of line
 
@@ -131,6 +136,12 @@ To prevent issues with selectedLink being out of bounds across page navigations:
 - Default port is 1965
 - TLS required (InsecureSkipVerify for simplicity)
 
+**Gemini Content Formatting:**
+- Lines starting with `=>` are links - parsed, numbered, and made selectable
+- Lines starting with `#`, `##`, or `###` are headers - displayed in bold with # symbols preserved
+- All other content is displayed as plain text
+- Content is converted from UTF-8 to ASCII for vintage terminal compatibility
+
 ## Common Modifications
 
 When adding features or fixing bugs:
@@ -138,7 +149,8 @@ When adding features or fixing bugs:
 - **Default start page**: Change the URL in navigateTo() call in Run() in session.go
 - **Keyboard shortcuts**: Modify handleInput() in session.go
 - **Link rendering**: Update parseContent() to change how Gemini links are displayed
+- **Header rendering**: Modify the header detection logic in parseContent() and formatting in render()
 - **UTF-8 mappings**: Add entries to unicodeToASCII() in utils.go
 - **Terminal size**: Adjust terminalHeight/terminalWidth in NewSession()
-- **Gemini features**: Extend parseContent() to handle headings, lists, preformatted text, quotes
+- **Gemini features**: Extend parseContent() to handle lists, preformatted text, quotes (currently handles links and headers)
 - **Server port**: Change the port constant in main()
