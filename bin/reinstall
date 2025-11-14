@@ -2,8 +2,14 @@
 
 set -e
 
+echo "Building..."
 go build
 
+echo "Stopping..."
 systemctl stop gemnet
-cp gemnet /opt/gemnet/gemnet
+
+echo "Moving..."
+mv gemnet /opt/gemnet/gemnet
+
+echo "Starting..."
 systemctl start gemnet
