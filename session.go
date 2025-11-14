@@ -14,6 +14,12 @@ type Link struct {
 	Line  int // Line number where link appears
 }
 
+type HistoryEntry struct {
+	URL          string
+	ScrollOffset int
+	SelectedLink int
+}
+
 type Session struct {
 	conn            net.Conn
 	currentURL      string
@@ -22,7 +28,8 @@ type Session struct {
 	headerLines     map[int]bool // Set of line numbers that are headers
 	selectedLink    int
 	scrollOffset    int      // Display line offset (accounts for wrapping)
-	history         []string
+	history         []HistoryEntry
+	historyIndex    int // Current position in history (-1 means no history)
 	terminalHeight  int
 	terminalWidth   int
 	inputMode       string // "", "goto"
@@ -36,7 +43,8 @@ func NewSession(conn net.Conn) *Session {
 		terminalWidth:  80,
 		selectedLink:   0,
 		scrollOffset:   0,
-		history:        make([]string, 0),
+		history:        make([]HistoryEntry, 0),
+		historyIndex:   -1,
 	}
 }
 
@@ -85,6 +93,12 @@ func (s *Session) handleInput(b byte) error {
 			case 'B': // Down arrow
 				s.handleArrowKey(1)
 				s.render()
+			case 'C': // Right arrow - forward in history
+				s.navigateForward()
+				s.render()
+			case 'D': // Left arrow - back in history
+				s.navigateBack()
+				s.render()
 			case '5': // Page Up
 				s.conn.Read(make([]byte, 1)) // Read trailing ~
 				s.scrollPageWithDirection(-1)
@@ -113,19 +127,8 @@ func (s *Session) handleInput(b byte) error {
 		return nil
 
 	case 0x7f, 0x08: // Backspace/Delete - go back
-		if len(s.history) > 0 {
-			s.history = s.history[:len(s.history)-1]
-			if len(s.history) > 0 {
-				lastURL := s.history[len(s.history)-1]
-				s.history = s.history[:len(s.history)-1] // Remove it since navigateTo will add it back
-				s.navigateTo(lastURL)
-			} else {
-				s.currentURL = ""
-				s.content = nil
-				s.links = nil
-				s.render()
-			}
-		}
+		s.navigateBack()
+		s.render()
 		return nil
 
 	case 'q', 'Q': // Quit
@@ -214,12 +217,44 @@ func (s *Session) navigateTo(urlStr string) {
 		return
 	}
 
-	// Success - parse content
-	s.history = append(s.history, urlStr)
+	// Success - save current page state to history before navigating
+	if s.currentURL != "" {
+		// Save current state
+		currentEntry := HistoryEntry{
+			URL:          s.currentURL,
+			ScrollOffset: s.scrollOffset,
+			SelectedLink: s.selectedLink,
+		}
+
+		// If we're in the middle of history, truncate forward history
+		if s.historyIndex >= 0 && s.historyIndex < len(s.history)-1 {
+			s.history = s.history[:s.historyIndex+1]
+		}
+
+		// Update the current history entry if it exists
+		if s.historyIndex >= 0 && s.historyIndex < len(s.history) {
+			s.history[s.historyIndex] = currentEntry
+		} else if len(s.history) == 0 {
+			s.history = append(s.history, currentEntry)
+			s.historyIndex = 0
+		}
+	}
+
+	// Parse new content
 	s.currentURL = urlStr
 	s.parseContent(resp.Body)
 	s.scrollOffset = 0
 	s.selectedLink = 0
+
+	// Add new page to history
+	newEntry := HistoryEntry{
+		URL:          urlStr,
+		ScrollOffset: 0,
+		SelectedLink: 0,
+	}
+	s.history = append(s.history, newEntry)
+	s.historyIndex = len(s.history) - 1
+
 	s.render()
 }
 
@@ -268,6 +303,88 @@ func (s *Session) parseContent(body string) {
 		}
 
 		s.content = append(s.content, line)
+	}
+}
+
+func (s *Session) navigateBack() {
+	if s.historyIndex <= 0 {
+		return // Can't go back further
+	}
+
+	// Save current state
+	if s.historyIndex < len(s.history) {
+		s.history[s.historyIndex] = HistoryEntry{
+			URL:          s.currentURL,
+			ScrollOffset: s.scrollOffset,
+			SelectedLink: s.selectedLink,
+		}
+	}
+
+	// Move back in history
+	s.historyIndex--
+	s.loadFromHistory()
+}
+
+func (s *Session) navigateForward() {
+	if s.historyIndex >= len(s.history)-1 {
+		return // Can't go forward further
+	}
+
+	// Save current state
+	if s.historyIndex >= 0 && s.historyIndex < len(s.history) {
+		s.history[s.historyIndex] = HistoryEntry{
+			URL:          s.currentURL,
+			ScrollOffset: s.scrollOffset,
+			SelectedLink: s.selectedLink,
+		}
+	}
+
+	// Move forward in history
+	s.historyIndex++
+	s.loadFromHistory()
+}
+
+func (s *Session) loadFromHistory() {
+	if s.historyIndex < 0 || s.historyIndex >= len(s.history) {
+		return
+	}
+
+	entry := s.history[s.historyIndex]
+
+	s.write([]byte(fmt.Sprintf("\r\n\x1b[KLoading %s...\r\n", entry.URL)))
+
+	resp, err := FetchGemini(entry.URL)
+	if err != nil {
+		s.write([]byte(fmt.Sprintf("Error: %v\r\n", err)))
+		s.write([]byte("Press any key to continue..."))
+		buf := make([]byte, 1)
+		s.conn.Read(buf)
+		s.render()
+		return
+	}
+
+	if resp.StatusCode < 20 || resp.StatusCode >= 30 {
+		s.write([]byte(fmt.Sprintf("Error: Status %d - %s\r\n", resp.StatusCode, resp.Meta)))
+		s.write([]byte("Press any key to continue..."))
+		buf := make([]byte, 1)
+		s.conn.Read(buf)
+		s.render()
+		return
+	}
+
+	// Load content and restore state
+	s.currentURL = entry.URL
+	s.parseContent(resp.Body)
+	s.scrollOffset = entry.ScrollOffset
+	s.selectedLink = entry.SelectedLink
+
+	// Validate restored state
+	if s.selectedLink >= len(s.links) {
+		s.selectedLink = 0
+	}
+	totalDisplayLines := s.getTotalDisplayLines()
+	if s.scrollOffset >= totalDisplayLines {
+		s.scrollOffset = 0
 	}
 }
 

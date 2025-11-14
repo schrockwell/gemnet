@@ -55,9 +55,15 @@ telnet localhost 2323
 - Tracks current URL, content lines, links, selected link index
 - headerLines: Map of content line numbers that are headers (for bold rendering)
 - scrollOffset: Display line offset (not content line) - accounts for wrapped lines
-- Maintains navigation history for back functionality
+- history: Array of HistoryEntry structs storing URL, scroll position, and selected link for each visited page
+- historyIndex: Current position in history array (-1 means no history)
 - Terminal dimensions (default 80x24)
 - Input state (mode and buffer for URL entry)
+
+**HistoryEntry**
+- URL: The page URL
+- ScrollOffset: Saved scroll position for this page
+- SelectedLink: Saved selected link index for this page
 
 **Link**
 - Index number for display
@@ -75,10 +81,15 @@ telnet localhost 2323
    - Extracts links (lines starting with "=>") and numbers them as "[N] link text"
    - Detects headers (lines starting with "#") and marks them for bold rendering (# symbols kept)
    - Converts UTF-8 to ASCII for vintage terminal compatibility
-6. User navigates with arrow keys (changes selectedLink)
-7. Enter key follows the selected link (resolves relative URLs against current base)
-8. Backspace returns to previous page via history stack
-9. User can press 'g' at any time to enter a new Gemini URL
+6. User navigates with:
+   - Up/Down arrows to change selected link
+   - Left arrow to go back in history
+   - Right arrow to go forward in history
+   - Enter to follow the selected link (resolves relative URLs against current base)
+   - Backspace also goes back in history (same as left arrow)
+   - 'g' to enter a new Gemini URL at any time
+7. History preserves scroll position and selected link for each page
+8. When navigating to a new page, forward history is truncated
 
 ### Terminal Control
 
@@ -102,10 +113,12 @@ Long lines are wrapped to the terminal width (default 80 columns). The wrapLine(
 
 Keyboard sequences:
 - ESC [ A/B - up/down arrows (smart scrolling - see below)
+- ESC [ C - right arrow (forward in history)
+- ESC [ D - left arrow (back in history)
 - ESC [ 5~ - page up
 - ESC [ 6~ - page down
 - 0x1b alone - escape (cancel input)
-- 0x7f/0x08 - backspace/delete
+- 0x7f/0x08 - backspace/delete (back in history)
 
 **Smart Arrow Key Scrolling:**
 The handleArrowKey() function provides intelligent navigation:
@@ -126,6 +139,14 @@ To prevent issues with selectedLink being out of bounds across page navigations:
 - parseContent() resets selectedLink to 0 when parsing new content
 - updateLinkSelectionWithDirection() performs bounds checking and has a fallback to select link 0
 - This ensures selectedLink is always valid, even when navigating between pages with different numbers of links
+
+**History Navigation:**
+Left/Right arrows and Backspace provide full browser-like history navigation:
+- navigateTo() saves current page state (URL, scrollOffset, selectedLink) before navigating to a new page
+- If navigating from the middle of history, forward history is truncated
+- navigateBack() and navigateForward() move through the history array and call loadFromHistory()
+- loadFromHistory() fetches the page and restores the saved scroll position and selected link
+- State validation ensures restored positions are valid (bounds checking for links and scroll offset)
 
 ### Gemini Protocol Details
 
@@ -150,6 +171,8 @@ When adding features or fixing bugs:
 - **Keyboard shortcuts**: Modify handleInput() in session.go
 - **Link rendering**: Update parseContent() to change how Gemini links are displayed
 - **Header rendering**: Modify the header detection logic in parseContent() and formatting in render()
+- **History behavior**: Modify navigateBack(), navigateForward(), and loadFromHistory() in session.go
+- **State preservation**: Add fields to HistoryEntry struct to save additional state per page
 - **UTF-8 mappings**: Add entries to unicodeToASCII() in utils.go
 - **Terminal size**: Adjust terminalHeight/terminalWidth in NewSession()
 - **Gemini features**: Extend parseContent() to handle lists, preformatted text, quotes (currently handles links and headers)
