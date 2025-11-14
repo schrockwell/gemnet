@@ -2,6 +2,8 @@
 
 A telnet-to-Gemini proxy server that enables vintage computing systems to browse the modern Gemini protocol.
 
+![Screenshot](screenshot.png)
+
 ## What is gemnet?
 
 gemnet bridges the gap between old technology and the Gemini ecosystem by providing a plain-text, ASCII-only interface over telnet. It's perfect for:
