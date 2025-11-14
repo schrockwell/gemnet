@@ -1,0 +1,9 @@
+#! /bin/bash
+
+set -e
+
+go build
+
+systemctl stop gemnet
+cp gemnet /opt/gemnet/gemnet
+systemctl start gemnet
