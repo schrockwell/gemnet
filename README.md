@@ -32,6 +32,8 @@ go build
 
 ## Running
 
+### Running Directly
+
 Start the server:
 
 ```bash
@@ -39,6 +41,44 @@ Start the server:
 ```
 
 The server listens on port 2323 by default.
+
+### Running as a systemd Service (Linux)
+
+1. Create a dedicated user for gemnet:
+```bash
+sudo useradd -r -s /bin/false gemnet
+```
+
+2. Install gemnet:
+```bash
+sudo mkdir -p /opt/gemnet
+sudo cp gemnet /opt/gemnet/
+sudo chown -R gemnet:gemnet /opt/gemnet
+```
+
+3. Install the systemd service file:
+```bash
+sudo cp etc/systemd/system/gemnet.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+4. Enable and start the service:
+```bash
+sudo systemctl enable gemnet
+sudo systemctl start gemnet
+```
+
+5. Check status:
+```bash
+sudo systemctl status gemnet
+```
+
+6. View logs:
+```bash
+sudo journalctl -u gemnet -f
+```
+
+The systemd service includes security hardening and automatic restart on failure.
 
 ## Connecting
 
@@ -89,6 +129,7 @@ Press `g` to bring up the URL prompt. Type a Gemini URL (or just a hostname - `g
 - **session.go** - Session management, UI rendering, and input handling
 - **gemini.go** - Gemini protocol client
 - **utils.go** - UTF-8 to ASCII conversion
+- **etc/systemd/system/gemnet.service** - Example systemd service file
 
 ### Performance Optimizations
 

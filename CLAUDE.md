@@ -6,6 +6,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 gemnet is a telnet-to-Gemini proxy server that enables vintage computing systems to browse the modern Gemini protocol. It bridges the gap between old technology (lacking TLS and UTF-8 support) and the Gemini ecosystem by providing a plain-text, ASCII-only interface over telnet.
 
+## Project Structure
+
+- **main.go** - Server entry point
+- **session.go** - Session management and UI
+- **gemini.go** - Gemini protocol client
+- **utils.go** - UTF-8 to ASCII conversion
+- **README.md** - User-facing documentation
+- **CLAUDE.md** - This file (developer documentation)
+- **etc/systemd/system/gemnet.service** - Example systemd service configuration
+
 ## Building and Running
 
 ```bash
