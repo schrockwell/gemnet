@@ -129,19 +129,31 @@ func (s *Session) moveLinkSelection(delta int) {
 
 func (s *Session) scrollPage(delta int) {
 	linesPerPage := s.terminalHeight - 3
-	s.scrollOffset += delta * linesPerPage
-
 	totalDisplayLines := s.getTotalDisplayLines()
+	oldScrollOffset := s.scrollOffset
 
-	if s.scrollOffset < 0 {
-		s.scrollOffset = 0
+	// Calculate new scroll position
+	newScrollOffset := s.scrollOffset + delta*linesPerPage
+
+	// Clamp to valid range
+	if newScrollOffset < 0 {
+		newScrollOffset = 0
 	}
-	if s.scrollOffset >= totalDisplayLines {
-		s.scrollOffset = totalDisplayLines - 1
+	maxScroll := totalDisplayLines - linesPerPage
+	if maxScroll < 0 {
+		maxScroll = 0
 	}
-	if s.scrollOffset < 0 {
-		s.scrollOffset = 0
+	if newScrollOffset > maxScroll {
+		newScrollOffset = maxScroll
 	}
+
+	// If scroll position didn't change, we're at a boundary - send beep
+	if newScrollOffset == oldScrollOffset {
+		s.write([]byte("\x07")) // BEL - beep
+		return
+	}
+
+	s.scrollOffset = newScrollOffset
 
 	// Update link selection to ensure a visible link is selected
 	s.updateLinkSelection()
@@ -149,19 +161,31 @@ func (s *Session) scrollPage(delta int) {
 
 func (s *Session) scrollPageWithDirection(delta int) {
 	linesPerPage := s.terminalHeight - 3
-	s.scrollOffset += delta * linesPerPage
-
 	totalDisplayLines := s.getTotalDisplayLines()
+	oldScrollOffset := s.scrollOffset
 
-	if s.scrollOffset < 0 {
-		s.scrollOffset = 0
+	// Calculate new scroll position
+	newScrollOffset := s.scrollOffset + delta*linesPerPage
+
+	// Clamp to valid range
+	if newScrollOffset < 0 {
+		newScrollOffset = 0
 	}
-	if s.scrollOffset >= totalDisplayLines {
-		s.scrollOffset = totalDisplayLines - 1
+	maxScroll := totalDisplayLines - linesPerPage
+	if maxScroll < 0 {
+		maxScroll = 0
 	}
-	if s.scrollOffset < 0 {
-		s.scrollOffset = 0
+	if newScrollOffset > maxScroll {
+		newScrollOffset = maxScroll
 	}
+
+	// If scroll position didn't change, we're at a boundary - send beep
+	if newScrollOffset == oldScrollOffset {
+		s.write([]byte("\x07")) // BEL - beep
+		return
+	}
+
+	s.scrollOffset = newScrollOffset
 
 	// Update link selection based on scroll direction
 	s.updateLinkSelectionWithDirection(delta)
