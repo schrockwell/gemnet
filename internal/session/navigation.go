@@ -1,9 +1,12 @@
-package main
+package session
 
 import (
 	"fmt"
 	"net/url"
 	"strings"
+
+	"gemnet/internal/gemini"
+	"gemnet/internal/util"
 )
 
 func (s *Session) navigateTo(urlStr string) {
@@ -20,7 +23,7 @@ func (s *Session) navigateTo(urlStr string) {
 
 	s.write([]byte(fmt.Sprintf("\r\n\x1b[KFetching %s...\r\n", urlStr)))
 
-	resp, err := FetchGemini(urlStr)
+	resp, err := gemini.Fetch(urlStr)
 	if err != nil {
 		s.write([]byte(fmt.Sprintf("Error: %v\r\n", err)))
 		s.write([]byte("Press any key to continue..."))
@@ -88,7 +91,7 @@ func (s *Session) navigateTo(urlStr string) {
 
 func (s *Session) parseContent(body string) {
 	// Convert UTF-8 to ASCII
-	asciiBody := UTF8ToASCII(body)
+	asciiBody := util.UTF8ToASCII(body)
 
 	// Split into lines
 	lines := strings.Split(asciiBody, "\n")
@@ -181,7 +184,7 @@ func (s *Session) loadFromHistory() {
 
 	s.write([]byte(fmt.Sprintf("\r\n\x1b[KLoading %s...\r\n", entry.URL)))
 
-	resp, err := FetchGemini(entry.URL)
+	resp, err := gemini.Fetch(entry.URL)
 	if err != nil {
 		s.write([]byte(fmt.Sprintf("Error: %v\r\n", err)))
 		s.write([]byte("Press any key to continue..."))

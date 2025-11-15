@@ -1,4 +1,4 @@
-package main
+package session
 
 import (
 	"net"
@@ -18,25 +18,25 @@ type HistoryEntry struct {
 }
 
 type Session struct {
-	conn            net.Conn
-	currentURL      string
-	content         []string // Content lines
-	links           []Link
-	headerLines     map[int]bool // Set of line numbers that are headers
-	selectedLink    int
-	scrollOffset    int      // Display line offset (accounts for wrapping)
-	prevSelectedLink int     // Previous selected link for partial redraw
-	prevScrollOffset int     // Previous scroll offset for partial redraw
-	lastByte        byte     // Last byte received (for CRLF handling)
-	history         []HistoryEntry
-	historyIndex    int // Current position in history (-1 means no history)
-	terminalHeight  int
-	terminalWidth   int
-	inputMode       string // "", "goto"
-	inputBuffer     string
+	conn             net.Conn
+	currentURL       string
+	content          []string // Content lines
+	links            []Link
+	headerLines      map[int]bool // Set of line numbers that are headers
+	selectedLink     int
+	scrollOffset     int  // Display line offset (accounts for wrapping)
+	prevSelectedLink int  // Previous selected link for partial redraw
+	prevScrollOffset int  // Previous scroll offset for partial redraw
+	lastByte         byte // Last byte received (for CRLF handling)
+	history          []HistoryEntry
+	historyIndex     int // Current position in history (-1 means no history)
+	terminalHeight   int
+	terminalWidth    int
+	inputMode        string // "", "goto"
+	inputBuffer      string
 }
 
-func NewSession(conn net.Conn) *Session {
+func New(conn net.Conn) *Session {
 	return &Session{
 		conn:           conn,
 		terminalHeight: 24,

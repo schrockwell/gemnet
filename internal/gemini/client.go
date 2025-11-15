@@ -1,4 +1,4 @@
-package main
+package gemini
 
 import (
 	"bufio"
@@ -9,14 +9,14 @@ import (
 	"strings"
 )
 
-type GeminiResponse struct {
+type Response struct {
 	StatusCode int
 	Meta       string
 	Body       string
 }
 
-// FetchGemini fetches a Gemini URL and returns the response
-func FetchGemini(urlStr string) (*GeminiResponse, error) {
+// Fetch fetches a Gemini URL and returns the response
+func Fetch(urlStr string) (*Response, error) {
 	// Parse URL
 	u, err := url.Parse(urlStr)
 	if err != nil {
@@ -72,7 +72,7 @@ func FetchGemini(urlStr string) (*GeminiResponse, error) {
 		meta = parts[1]
 	}
 
-	response := &GeminiResponse{
+	response := &Response{
 		StatusCode: statusCode,
 		Meta:       meta,
 	}

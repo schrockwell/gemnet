@@ -3,7 +3,7 @@
 set -e
 
 echo "Building..."
-go build
+./bin/build
 
 echo "Stopping..."
 systemctl stop gemnet

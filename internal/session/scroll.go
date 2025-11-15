@@ -1,4 +1,4 @@
-package main
+package session
 
 func (s *Session) handleArrowKey(delta int) {
 	visibleLines := s.terminalHeight - 3

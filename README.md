@@ -119,18 +119,21 @@ Press `g` to bring up the URL prompt. Type a Gemini URL (or just a hostname - `g
 ## Technical Details
 
 - **Protocol**: Full Gemini protocol implementation with TLS
-- **Default port**: 2323 (configurable in main.go)
+- **Default port**: 2323 (configurable in cmd/gemnet/main.go)
 - **Terminal**: VT100/ANSI compatible
-- **Terminal size**: Defaults to 80x24 (configurable in session.go)
+- **Terminal size**: Defaults to 80x24 (configurable in internal/session/session.go)
 - **Character encoding**: All UTF-8 content is converted to ASCII
 - **Line endings**: Handles both CRLF and LF
 
 ### Architecture
 
-- **main.go** - Telnet server
-- **session.go** - Session management, UI rendering, and input handling
-- **gemini.go** - Gemini protocol client
-- **utils.go** - UTF-8 to ASCII conversion
+The project follows standard Go project layout:
+
+- **cmd/gemnet/** - Main application entry point
+- **internal/server/** - Connection handling
+- **internal/session/** - Session management, UI rendering, input handling, navigation, and scrolling
+- **internal/gemini/** - Gemini protocol client
+- **internal/util/** - UTF-8 to ASCII conversion utilities
 - **etc/systemd/system/gemnet.service** - Example systemd service file
 
 ### Performance Optimizations
