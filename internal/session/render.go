@@ -10,14 +10,54 @@ func (s *Session) render() {
 	s.write([]byte("\x1b[2J\x1b[H"))
 
 	// Status line
-	status := "gemnet"
+	statusLine := "gemnet"
+
 	if s.currentURL != "" {
-		status = s.currentURL
-		if len(status) > s.terminalWidth-1 {
-			status = status[:s.terminalWidth-1]
+		// Calculate progress information based on LAST visible line
+		visibleLines := s.terminalHeight - 3
+		totalDisplayLines := s.getTotalDisplayLines()
+
+		// Current line is the last line visible on screen
+		currentLine := s.scrollOffset + visibleLines
+		if currentLine > totalDisplayLines {
+			currentLine = totalDisplayLines
 		}
+		if currentLine < 1 {
+			currentLine = 1
+		}
+
+		percentage := 0
+		if totalDisplayLines > 0 {
+			percentage = (currentLine * 100) / totalDisplayLines
+			if percentage > 100 {
+				percentage = 100
+			}
+		}
+
+		// Format progress with padded percentage (always 3 digits + %)
+		progress := fmt.Sprintf("[%d/%d] %3d%%", currentLine, totalDisplayLines, percentage)
+
+		// Calculate how much space we have for the URL
+		maxURLLen := s.terminalWidth - len(progress) - 1 // -1 for space between URL and progress
+		if maxURLLen < 10 {
+			maxURLLen = 10
+		}
+
+		url := s.currentURL
+		if len(url) > maxURLLen {
+			url = url[:maxURLLen]
+		}
+
+		// Right-align progress by padding with spaces
+		padding := s.terminalWidth - len(url) - len(progress)
+		if padding < 1 {
+			padding = 1
+		}
+
+		statusLine = url + strings.Repeat(" ", padding) + progress
 	}
-	s.write([]byte(status))
+
+	s.write([]byte(statusLine))
 	s.write([]byte("\r\n"))
 	s.write([]byte(strings.Repeat("-", s.terminalWidth)))
 	s.write([]byte("\r\n"))
